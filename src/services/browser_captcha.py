@@ -1147,7 +1147,11 @@ class TokenBrowser:
                 )
                 # Continue after the document response; proxy-heavy pages can keep
                 # subresources open while Enterprise readiness is checked below.
-                await page.goto(target_url, wait_until="commit", timeout=15000)
+                print(f"[BrowserCaptcha] Token-{self.token_id} navigating to Flow page")
+                await asyncio.wait_for(
+                    page.goto(target_url, wait_until="commit", timeout=10000),
+                    timeout=12,
+                )
                 loaded = True
                 print(f"[BrowserCaptcha] Token-{self.token_id} Flow page committed: {target_url}")
                 break
