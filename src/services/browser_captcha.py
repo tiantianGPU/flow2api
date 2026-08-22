@@ -1841,10 +1841,6 @@ class TokenBrowser:
             if not ready:
                 return None
 
-            if config.captcha_method == "agent_captcha":
-                from .agent_captcha import solve_if_present
-                await solve_if_present(page)
-
             token = None
             for execute_attempt in range(2):
                 try:
@@ -2221,12 +2217,6 @@ class TokenBrowser:
                         )
                         if not ready:
                             raise RuntimeError("grecaptcha.enterprise 未就绪")
-
-                        if config.captcha_method == "agent_captcha":
-                            # A challenge can appear on the submit page after the
-                            # initial token warm-up, so run the external solver here too.
-                            from .agent_captcha import solve_if_present
-                            await solve_if_present(page)
 
                         payload_for_submit = deepcopy(json_data)
                         response_payload = None
