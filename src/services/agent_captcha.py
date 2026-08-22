@@ -128,21 +128,24 @@ async def _has_visible_vision_challenge(page: Any) -> bool:
             instruction_count = await instruction.count()
             if instruction_count > 0:
                 for index in range(min(instruction_count, 3)):
-                    text = " ".join((await instruction.nth(index).inner_text()).split())
+                    candidate = instruction.nth(index)
+                    box = await candidate.bounding_box()
+                    if not box or box.get("width", 0) <= 1 or box.get("height", 0) <= 1:
+                        continue
+                    text = " ".join((await candidate.inner_text()).split())
                     if len(text) >= 5:
                         return True
 
             tiles = frame.locator(
                 ".rc-imageselect-tile, .task-image, [class*='challenge-image' i]"
             )
-            if await tiles.count() >= 3:
+            visible_tiles = 0
+            for index in range(min(await tiles.count(), 12)):
+                box = await tiles.nth(index).bounding_box()
+                if box and box.get("width", 0) > 20 and box.get("height", 0) > 20:
+                    visible_tiles += 1
+            if visible_tiles >= 3:
                 return True
-
-            canvas = frame.locator("canvas").first
-            if await canvas.count():
-                box = await canvas.bounding_box()
-                if box and box.get("width", 0) > 100 and box.get("height", 0) > 100:
-                    return True
         except Exception:
             continue
     return False
