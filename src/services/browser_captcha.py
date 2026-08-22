@@ -1244,7 +1244,12 @@ class TokenBrowser:
                 captcha_config = await self.db.get_captcha_config()
                 if captcha_config.browser_proxy_enabled and captcha_config.browser_proxy_url:
                     candidate_proxy_url = captcha_config.browser_proxy_url.strip()
-                    proxy_source = "global"
+                    proxy_source = "browser"
+                else:
+                    request_proxy = await self.db.get_proxy_config()
+                    if request_proxy and request_proxy.enabled and request_proxy.proxy_url:
+                        candidate_proxy_url = request_proxy.proxy_url.strip()
+                        proxy_source = "request_fallback"
 
             if candidate_proxy_url:
                 normalized_proxy_url, proxy_warning = normalize_browser_proxy_url(candidate_proxy_url)
