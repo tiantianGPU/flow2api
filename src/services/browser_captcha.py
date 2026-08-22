@@ -1160,6 +1160,27 @@ class TokenBrowser:
                 debug_logger.log_warning(
                     f"[BrowserCaptcha] Token-{self.token_id} {label}Flow 页面打开失败[{index + 1}/{len(page_urls)}]: {last_error}"
                 )
+                # Chromium can time out while the document is already attached
+                # (for example, when a proxy keeps subresources open). Reuse a
+                # partially loaded Flow document when its URL is usable.
+                try:
+                    current_url = str(page.url or "")
+                    ready_state = await asyncio.wait_for(
+                        page.evaluate("document.readyState"), timeout=2
+                    )
+                    if current_url.startswith("https://labs.google/") and ready_state in {
+                        "loading",
+                        "interactive",
+                        "complete",
+                    }:
+                        loaded = True
+                        print(
+                            f"[BrowserCaptcha] Token-{self.token_id} reusing partially loaded Flow page "
+                            f"(readyState={ready_state})"
+                        )
+                        break
+                except Exception:
+                    pass
                 print(f"[BrowserCaptcha] Token-{self.token_id} Flow page navigation failed: {last_error}")
 
         if not loaded:
