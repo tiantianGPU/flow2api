@@ -1133,6 +1133,14 @@ class FlowClient:
                                 error_reason = f"{error_reason}: {error_message}"
                         elif response_text:
                             error_reason = f"HTTP Error {status_code}: {response_text[:200]}"
+                        if (
+                            config.captcha_method == "agent_captcha"
+                            and "recaptcha evaluation failed" in error_reason.lower()
+                        ):
+                            error_reason += (
+                                "；当前是 reCAPTCHA Enterprise 风险评分失败，不是视觉挑战，"
+                                "Agent-Captcha 无法通过图片打码修复，请为有头浏览器配置住宅代理"
+                            )
                         raise Exception(error_reason)
 
                     result = json.loads(response_text) if response_text else {}
@@ -4074,6 +4082,16 @@ class FlowClient:
             )
 
         if not retry_reason:
+            return False
+
+        if (
+            config.captcha_method == "agent_captcha"
+            and "recaptcha evaluation failed" in error_str.lower()
+        ):
+            debug_logger.log_warning(
+                f"{log_prefix} Agent-Captcha 未检测到可处理的视觉挑战，"
+                "Enterprise 风险评分失败将立即返回，请配置浏览器住宅代理后重试"
+            )
             return False
 
         if is_terminal_attempt:
