@@ -158,7 +158,16 @@ async def solve_if_present(page: Any, *, shot_dir: str = "tmp/agent-captcha") ->
     except Exception:
         has_vision = False
     if not (has_arkose or has_vision):
+        print(
+            "[agent-captcha] checked: no visible image challenge; "
+            "continuing reCAPTCHA Enterprise risk-score flow"
+        )
         return False
+
+    if has_vision:
+        print("[agent-captcha] visible image challenge detected; starting screenshot/OCR/click solver")
+    elif has_arkose:
+        print("[agent-captcha] Arkose challenge detected; starting puzzle solver")
 
     module = await _get_module()
     if has_vision and _vision_module is not None and _vision_spec_path:

@@ -1263,6 +1263,30 @@ class TokenBrowser:
             pass
         return True
 
+    async def _run_agent_captcha_if_present(self, page) -> bool:
+        """Check for a rendered visual challenge before Enterprise execution."""
+        if config.captcha_method != "agent_captcha":
+            return False
+        try:
+            from .agent_captcha import solve_if_present
+
+            solved = await solve_if_present(page)
+            print(
+                f"[BrowserCaptcha] Token-{self.token_id} Agent-Captcha checked: "
+                f"visual_challenge_solved={solved}"
+            )
+            return solved
+        except Exception as exc:
+            debug_logger.log_warning(
+                f"[BrowserCaptcha] Token-{self.token_id} Agent-Captcha check failed: "
+                f"{type(exc).__name__}: {str(exc)[:200]}"
+            )
+            print(
+                f"[BrowserCaptcha] Token-{self.token_id} Agent-Captcha check failed: "
+                f"{type(exc).__name__}"
+            )
+            return False
+
     async def _resolve_proxy_runtime_config(self, token_proxy_url: Optional[str] = None) -> tuple:
         """Resolve runtime proxy configuration."""
         proxy_option = None
@@ -1874,6 +1898,7 @@ class TokenBrowser:
             )
             if not ready:
                 return None
+            await self._run_agent_captcha_if_present(page)
             print(f"[BrowserCaptcha] Token-{self.token_id} starting Enterprise execute")
 
             token = None
@@ -2256,6 +2281,8 @@ class TokenBrowser:
                         )
                         if not ready:
                             raise RuntimeError("grecaptcha.enterprise 未就绪")
+
+                        await self._run_agent_captcha_if_present(page)
 
                         payload_for_submit = deepcopy(json_data)
                         response_payload = None
