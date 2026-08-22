@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+import asyncio
 import base64
 import json
 import mimetypes
@@ -509,6 +510,33 @@ async def _collect_non_stream_result(
     return result
 
 
+async def _iter_with_sse_heartbeat(iterator, heartbeat_seconds: float = 10.0):
+    """Yield generator items while keeping long-running SSE requests alive."""
+    iterator = iterator.__aiter__()
+    pending = asyncio.create_task(iterator.__anext__())
+    try:
+        while True:
+            try:
+                item = await asyncio.wait_for(
+                    asyncio.shield(pending), timeout=heartbeat_seconds
+                )
+            except asyncio.TimeoutError:
+                yield None
+                continue
+            except StopAsyncIteration:
+                return
+
+            pending = asyncio.create_task(iterator.__anext__())
+            yield item
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+            try:
+                await pending
+            except (asyncio.CancelledError, StopAsyncIteration):
+                pass
+
+
 def _parse_handler_result(result: str) -> Dict[str, Any]:
     try:
         return json.loads(result)
@@ -722,14 +750,18 @@ async def _iterate_openai_stream(
     base_url_override: Optional[str] = None,
 ):
     handler = _ensure_generation_handler()
-    async for chunk in handler.handle_generation(
+    generation = handler.handle_generation(
         model=normalized.model,
         prompt=normalized.prompt,
         images=normalized.images if normalized.images else None,
         stream=True,
         base_url_override=base_url_override,
         video_media_id=normalized.video_media_id,
-    ):
+    )
+    async for chunk in _iter_with_sse_heartbeat(generation):
+        if chunk is None:
+            yield ": keep-alive\n\n"
+            continue
         if chunk.startswith("data: "):
             yield chunk
             continue
@@ -746,14 +778,18 @@ async def _iterate_gemini_stream(
     base_url_override: Optional[str] = None,
 ):
     handler = _ensure_generation_handler()
-    async for chunk in handler.handle_generation(
+    generation = handler.handle_generation(
         model=normalized.model,
         prompt=normalized.prompt,
         images=normalized.images if normalized.images else None,
         stream=True,
         base_url_override=base_url_override,
         video_media_id=normalized.video_media_id,
-    ):
+    )
+    async for chunk in _iter_with_sse_heartbeat(generation):
+        if chunk is None:
+            yield ": keep-alive\n\n"
+            continue
         if chunk.startswith("data: "):
             payload_text = chunk[6:].strip()
             if payload_text == "[DONE]":
