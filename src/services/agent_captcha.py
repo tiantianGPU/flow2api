@@ -109,18 +109,56 @@ def _has_arkose_frame(page: Any) -> bool:
     return False
 
 
-def _has_vision_frame(page: Any) -> bool:
+async def _has_visible_vision_challenge(page: Any) -> bool:
+    """Return true only when a real image challenge is rendered.
+
+    Enterprise reCAPTCHA normally creates an ``api2/bframe`` iframe even
+    without showing a visual challenge. Matching the iframe URL alone causes
+    the vision solver to wait on every risk-score request.
+    """
     for frame in getattr(page, "frames", []) or []:
         url = str(getattr(frame, "url", "") or "").lower()
-        if any(marker in url for marker in ("recaptcha/api2", "api2/bframe", "hcaptcha.com")):
-            return True
+        if not any(marker in url for marker in ("recaptcha/api2", "api2/bframe", "hcaptcha.com")):
+            continue
+        try:
+            instruction = frame.locator(
+                ".rc-imageselect-instructions, [data-testid*='prompt' i], "
+                "[class*='challenge-header' i], [class*='prompt' i]"
+            )
+            instruction_count = await instruction.count()
+            if instruction_count > 0:
+                for index in range(min(instruction_count, 3)):
+                    text = " ".join((await instruction.nth(index).inner_text()).split())
+                    if len(text) >= 5:
+                        return True
+
+            tiles = frame.locator(
+                ".rc-imageselect-tile, .task-image, [class*='challenge-image' i]"
+            )
+            if await tiles.count() >= 3:
+                return True
+
+            canvas = frame.locator("canvas").first
+            if await canvas.count():
+                box = await canvas.bounding_box()
+                if box and box.get("width", 0) > 100 and box.get("height", 0) > 100:
+                    return True
+        except Exception:
+            continue
     return False
 
 
 async def solve_if_present(page: Any, *, shot_dir: str = "tmp/agent-captcha") -> bool:
-    """Solve an Arkose challenge on a Playwright page when one is present."""
+    """Solve a rendered Arkose or image challenge when one is present."""
     has_arkose = _has_arkose_frame(page)
-    has_vision = _has_vision_frame(page)
+    try:
+        has_vision = await asyncio.wait_for(
+            _has_visible_vision_challenge(page), timeout=2
+        )
+    except asyncio.TimeoutError:
+        has_vision = False
+    except Exception:
+        has_vision = False
     if not (has_arkose or has_vision):
         return False
 
