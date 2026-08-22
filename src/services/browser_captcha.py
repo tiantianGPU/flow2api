@@ -1139,6 +1139,7 @@ class TokenBrowser:
 
         loaded = False
         last_error: Optional[str] = None
+        print(f"[BrowserCaptcha] Token-{self.token_id} preparing Flow page")
         for index, target_url in enumerate(page_urls):
             try:
                 debug_logger.log_info(
@@ -1148,12 +1149,14 @@ class TokenBrowser:
                 # subresources open while Enterprise readiness is checked below.
                 await page.goto(target_url, wait_until="commit", timeout=15000)
                 loaded = True
+                print(f"[BrowserCaptcha] Token-{self.token_id} Flow page committed: {target_url}")
                 break
             except Exception as e:
                 last_error = f"{type(e).__name__}: {str(e)[:200]}"
                 debug_logger.log_warning(
                     f"[BrowserCaptcha] Token-{self.token_id} {label}Flow 页面打开失败[{index + 1}/{len(page_urls)}]: {last_error}"
                 )
+                print(f"[BrowserCaptcha] Token-{self.token_id} Flow page navigation failed: {last_error}")
 
         if not loaded:
             debug_logger.log_warning(
@@ -1175,6 +1178,7 @@ class TokenBrowser:
             debug_logger.log_warning(
                 f"[BrowserCaptcha] Token-{self.token_id} {label}Flow 页面 readyState 未达到 complete，继续尝试预热"
             )
+        print(f"[BrowserCaptcha] Token-{self.token_id} Flow page readyState={page_loaded}")
 
         try:
             await page.bring_to_front()
@@ -1220,7 +1224,10 @@ class TokenBrowser:
             context_label=f"{label}真实页面",
         )
         if not ready:
+            print(f"[BrowserCaptcha] Token-{self.token_id} Enterprise API not ready")
             return False
+
+        print(f"[BrowserCaptcha] Token-{self.token_id} Enterprise API ready")
 
         await self._capture_page_fingerprint(page)
         try:
@@ -1842,6 +1849,7 @@ class TokenBrowser:
             )
             if not ready:
                 return None
+            print(f"[BrowserCaptcha] Token-{self.token_id} starting Enterprise execute")
 
             token = None
             for execute_attempt in range(2):
@@ -1861,6 +1869,10 @@ class TokenBrowser:
                     )
                     break
                 except Exception:
+                    print(
+                        f"[BrowserCaptcha] Token-{self.token_id} Enterprise execute failed "
+                        f"(attempt={execute_attempt + 1})"
+                    )
                     if execute_attempt or config.captcha_method != "agent_captcha":
                         raise
                     from .agent_captcha import solve_if_present
