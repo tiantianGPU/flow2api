@@ -466,6 +466,18 @@ class Config:
             return 5
 
     @property
+    def browser_captcha_attempt_timeout(self) -> int:
+        """Maximum seconds for one headed browser captcha attempt."""
+        value = os.getenv(
+            "BROWSER_CAPTCHA_ATTEMPT_TIMEOUT",
+            self._config.get("captcha", {}).get("browser_captcha_attempt_timeout", 60),
+        )
+        try:
+            return max(30, min(180, int(value)))
+        except Exception:
+            return 60
+
+    @property
     def browser_captcha_generation_retries(self) -> int:
         """生成接口因 reCAPTCHA 评估失败时允许的总重试次数。"""
         value = self._config.get("captcha", {}).get("browser_captcha_generation_retries", 6)

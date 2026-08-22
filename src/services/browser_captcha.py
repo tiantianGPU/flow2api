@@ -1881,7 +1881,7 @@ class TokenBrowser:
         finally:
             if page:
                 try:
-                    await page.close()
+                    await asyncio.wait_for(page.close(), timeout=3)
                 except:
                     pass
 
@@ -2378,17 +2378,20 @@ class TokenBrowser:
         async with self._semaphore:
             self._solve_inflight += 1
             max_retries = 3
+            attempt_timeout = max(30, int(getattr(config, "browser_captcha_attempt_timeout", 60) or 60))
 
             try:
                 for attempt in range(max_retries):
                     try:
                         start_ts = time.time()
-                        _, _, context = await self._get_or_create_shared_browser(
-                            token_proxy_url=token_proxy_url,
-                            token_id=token_id,
-                        )
+                        async def _solve_attempt():
+                            _, _, context = await self._get_or_create_shared_browser(
+                                token_proxy_url=token_proxy_url,
+                                token_id=token_id,
+                            )
+                            return await self._execute_captcha(context, project_id, website_key, action)
 
-                        token = await self._execute_captcha(context, project_id, website_key, action)
+                        token = await asyncio.wait_for(_solve_attempt(), timeout=attempt_timeout)
                         if token:
                             self._solve_count += 1
                             self._consecutive_browser_failures = 0
@@ -2404,6 +2407,22 @@ class TokenBrowser:
                         )
                         if self._consecutive_browser_failures >= 2:
                             await self.recycle_browser(reason=f"captcha_failed_{attempt + 1}", rotate_profile=False)
+                    except asyncio.TimeoutError:
+                        self._error_count += 1
+                        self._consecutive_browser_failures += 1
+                        error_message = (
+                            f"BrowserCaptchaTimeout: headed browser captcha exceeded {attempt_timeout}s; "
+                            "check residential proxy, Chrome network, and reCAPTCHA Enterprise risk score"
+                        )
+                        debug_logger.log_error(
+                            f"[BrowserCaptcha] Token-{self.token_id} {error_message}"
+                        )
+                        print(f"[BrowserCaptcha] {error_message}")
+                        try:
+                            await self.recycle_browser(reason="captcha_attempt_timeout", rotate_profile=False)
+                        except Exception:
+                            pass
+                        raise RuntimeError(error_message)
                     except Exception as e:
                         self._error_count += 1
                         self._consecutive_browser_failures += 1
