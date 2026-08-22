@@ -1144,7 +1144,9 @@ class TokenBrowser:
                 debug_logger.log_info(
                     f"[BrowserCaptcha] Token-{self.token_id} {label}打开真实 Flow 页面: {target_url} (action={action})"
                 )
-                await page.goto(target_url, wait_until="domcontentloaded", timeout=45000)
+                # Continue after the document response; proxy-heavy pages can keep
+                # subresources open while Enterprise readiness is checked below.
+                await page.goto(target_url, wait_until="commit", timeout=15000)
                 loaded = True
                 break
             except Exception as e:
@@ -1160,7 +1162,7 @@ class TokenBrowser:
             return False
 
         page_loaded = False
-        for _ in range(20):
+        for _ in range(10):
             try:
                 ready_state = await page.evaluate("document.readyState")
                 if ready_state == "complete":
@@ -1214,7 +1216,7 @@ class TokenBrowser:
             website_key,
             primary_host,
             secondary_host,
-            timeout_ms=15000,
+            timeout_ms=8000,
             context_label=f"{label}真实页面",
         )
         if not ready:
