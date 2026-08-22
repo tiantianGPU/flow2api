@@ -1199,6 +1199,10 @@ class TokenBrowser:
                 except Exception:
                     pass
                 print(f"[BrowserCaptcha] Token-{self.token_id} Flow page navigation failed: {last_error}")
+                if self._browser_proxy_active:
+                    # A proxy timeout is normally independent of the project URL;
+                    # do not spend another navigation budget before direct fallback.
+                    break
 
         if not loaded:
             debug_logger.log_warning(
@@ -1207,9 +1211,12 @@ class TokenBrowser:
             return False
 
         page_loaded = False
+        print(f"[BrowserCaptcha] Token-{self.token_id} checking Flow document readyState")
         for _ in range(10):
             try:
-                ready_state = await page.evaluate("document.readyState")
+                ready_state = await asyncio.wait_for(
+                    page.evaluate("document.readyState"), timeout=2
+                )
                 if ready_state == "complete":
                     page_loaded = True
                     break
@@ -1223,15 +1230,15 @@ class TokenBrowser:
         print(f"[BrowserCaptcha] Token-{self.token_id} Flow page readyState={page_loaded}")
 
         try:
-            await page.bring_to_front()
+            await asyncio.wait_for(page.bring_to_front(), timeout=3)
         except Exception:
             pass
 
         try:
-            await page.mouse.move(320, 220)
-            await page.mouse.move(560, 360, steps=16)
-            await page.mouse.wheel(0, 260)
-            await page.evaluate(
+            await asyncio.wait_for(page.mouse.move(320, 220), timeout=2)
+            await asyncio.wait_for(page.mouse.move(560, 360, steps=16), timeout=2)
+            await asyncio.wait_for(page.mouse.wheel(0, 260), timeout=2)
+            await asyncio.wait_for(page.evaluate(
                 """
                 (() => {
                     try {
@@ -1246,24 +1253,33 @@ class TokenBrowser:
                     } catch (e) {}
                 })()
                 """
-            )
+            ), timeout=5)
         except Exception:
-            pass
+            print(f"[BrowserCaptcha] Token-{self.token_id} Flow interaction warmup skipped")
 
-        warmup_seconds = float(getattr(config, "browser_flow_page_warmup_seconds", 6) or 6)
+        warmup_default = 6
+        if "direct fallback" in label.lower():
+            warmup_default = 0
+        warmup_seconds = float(
+            getattr(config, "browser_flow_page_warmup_seconds", warmup_default)
+            or warmup_default
+        )
         if warmup_seconds > 0:
             debug_logger.log_info(
                 f"[BrowserCaptcha] Token-{self.token_id} {label}真实页面预热 {warmup_seconds:.1f}s"
             )
             await asyncio.sleep(warmup_seconds)
 
-        ready = await self._wait_for_enterprise_ready(
-            page,
-            website_key,
-            primary_host,
-            secondary_host,
-            timeout_ms=8000,
-            context_label=f"{label}真实页面",
+        ready = await asyncio.wait_for(
+            self._wait_for_enterprise_ready(
+                page,
+                website_key,
+                primary_host,
+                secondary_host,
+                timeout_ms=8000,
+                context_label=f"{label}真实页面",
+            ),
+            timeout=12,
         )
         if not ready:
             print(f"[BrowserCaptcha] Token-{self.token_id} Enterprise API not ready")
