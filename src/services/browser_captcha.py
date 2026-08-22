@@ -1311,6 +1311,8 @@ class TokenBrowser:
         proxy_source = "none"
         self._browser_proxy_active = False
         try:
+            if token_proxy_url == "__direct__":
+                return None, None, "direct_fallback"
             candidate_proxy_url = None
             if token_proxy_url and token_proxy_url.strip():
                 candidate_proxy_url = token_proxy_url.strip()
@@ -1913,6 +1915,37 @@ class TokenBrowser:
                 action,
                 context_label="打码",
             )
+            if not ready and self._browser_proxy_active:
+                print(
+                    f"[BrowserCaptcha] Token-{self.token_id} proxy navigation failed; "
+                    "retrying once with direct headed browser"
+                )
+                try:
+                    await self.recycle_browser(
+                        reason="proxy_navigation_failed_direct_fallback",
+                        rotate_profile=False,
+                    )
+                    _, _, direct_context = await self._get_or_create_shared_browser(
+                        token_proxy_url="__direct__",
+                    )
+                    await page.close()
+                    page = await direct_context.new_page()
+                    await self._apply_browser_environment_patch(page, label="direct_fallback_captcha_page")
+                    await page.add_init_script(
+                        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                    )
+                    ready = await self._prepare_flow_runtime_page(
+                        page,
+                        project_id,
+                        website_key,
+                        action,
+                        context_label="direct fallback 打码",
+                    )
+                except Exception as fallback_exc:
+                    debug_logger.log_warning(
+                        f"[BrowserCaptcha] Token-{self.token_id} direct fallback failed: "
+                        f"{type(fallback_exc).__name__}: {str(fallback_exc)[:200]}"
+                    )
             if not ready:
                 return None
             await self._run_agent_captcha_if_present(page)
