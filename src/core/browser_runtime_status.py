@@ -20,6 +20,7 @@ _DEFAULT_STATUS = {
 }
 _RUNTIME_STATUS: Dict[str, Dict[str, Any]] = {
     "browser": dict(_DEFAULT_STATUS),
+    "agent_captcha": dict(_DEFAULT_STATUS),
     "personal": dict(_DEFAULT_STATUS),
 }
 

@@ -115,7 +115,19 @@ docker compose -f docker-compose.headed.yml logs -f
 ```
 
 - API 端口：`8000`
-- 进入管理后台后，将验证码方式设为 `browser` 或 `personal`
+- 进入管理后台后，将验证码方式设为 `browser`、`agent_captcha` 或 `personal`
+
+`agent_captcha` 会在有头浏览器页面实际出现 Arkose/Funcaptcha 拼图时调用
+`reg-factory/common/agent_captcha.py`。请在运行环境设置 `AGENT_CAPTCHA_MODULE_PATH`
+指向 `reg-factory` 根目录或该 Python 文件。普通 Flow 请求仍由浏览器直接执行
+Google reCAPTCHA Enterprise，不会把 Arkose 求解器当作 V3 token API。
+
+有头镜像会内置 `reg-factory` 的最小视觉求解器，默认路径为 `/app/reg-factory`。
+视觉模型使用 `VISION_*`、`VOTE_*`、`GEMMA_*` 环境变量；这些变量只需配置在运行环境，
+不要把完整 `.env` 文件复制进镜像。
+
+设置 `CAPTCHA_METHOD=agent_captcha` 可在容器启动时直接启用内置模式，覆盖数据库里旧的
+验证码方式；其他平台的配置仍会保留，但不会和 Agent-Captcha 并发调用。
 
 ### 方式二：本地部署
 

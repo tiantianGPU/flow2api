@@ -116,13 +116,16 @@ async def lifespan(app: FastAPI):
     generation_handler.file_cache.set_timeout(config.cache_timeout)
     cache_cleanup_enabled = await generation_handler.file_cache.refresh_cleanup_task()
     captcha_config = await db.get_captcha_config()
+    # CAPTCHA_METHOD is an optional deployment-level override. It lets a
+    # container select the bundled solver without rewriting a persisted DB.
+    effective_captcha_method = config.captcha_method
 
     # 尽量在浏览器服务启动前就拿到 token 快照，后续并发管理和预热共用。
     tokens = await token_manager.get_all_tokens()
 
     # Initialize browser captcha service if needed
     browser_service = None
-    if captcha_config.captcha_method == "personal":
+    if effective_captcha_method == "personal":
         from .services.browser_captcha_personal import (
             BrowserCaptchaService,
             PERSONAL_POOL_MAX_TOTAL_RESIDENT_TABS,
@@ -168,7 +171,7 @@ async def lifespan(app: FastAPI):
             # 没有任何可用 token 时，打开登录窗口供用户手动操作
             await browser_service.open_login_window()
             print("No active token found, opened login window for manual setup")
-    elif captcha_config.captcha_method == "browser":
+    elif effective_captcha_method in {"browser", "agent_captcha"}:
         from .services.browser_captcha import BrowserCaptchaService
         browser_service = await BrowserCaptchaService.get_instance(db)
         await browser_service.warmup_browser_slots()

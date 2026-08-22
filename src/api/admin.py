@@ -162,7 +162,7 @@ def _validate_browser_proxy_url_local(proxy_url: str) -> tuple[bool, Optional[st
 
 def _normalize_runtime_method(method: Optional[str]) -> str:
     normalized = (method or "").strip().lower()
-    if normalized not in {"browser", "personal"}:
+    if normalized not in {"browser", "agent_captcha", "personal"}:
         raise HTTPException(status_code=400, detail="Invalid runtime method")
     return normalized
 
@@ -170,7 +170,7 @@ def _normalize_runtime_method(method: Optional[str]) -> str:
 async def _prepare_captcha_runtime(method: str):
     runtime_method = _normalize_runtime_method(method)
     try:
-        if runtime_method == "browser":
+        if runtime_method in {"browser", "agent_captcha"}:
             start_runtime_prepare(
                 runtime_method,
                 "已开始准备有头浏览器打码运行环境，安装进度将自动显示。",
@@ -181,7 +181,7 @@ async def _prepare_captcha_runtime(method: str):
                 "已开始准备内置浏览器打码运行环境，安装进度将自动显示。",
             )
 
-        if runtime_method == "browser":
+        if runtime_method in {"browser", "agent_captcha"}:
             module = await asyncio.to_thread(importlib.import_module, "src.services.browser_captcha")
             service_cls = getattr(module, "BrowserCaptchaService")
             service = await service_cls.get_instance(db)
@@ -389,7 +389,7 @@ async def _resolve_score_test_verify_proxy(
     返回: (proxies, used, source, proxy_url)
     """
     # 浏览器打码模式优先使用 browser_proxy，确保与取 token 出口一致
-    if captcha_method in {"browser", "personal"} and browser_proxy_enabled and browser_proxy_url:
+    if captcha_method in {"browser", "agent_captcha", "personal"} and browser_proxy_enabled and browser_proxy_url:
         proxy_map = _build_proxy_map(browser_proxy_url)
         if proxy_map:
             return proxy_map, True, "captcha_browser_proxy", browser_proxy_url
@@ -1866,10 +1866,10 @@ async def update_captcha_config(
     runtime_prepare_message = ""
     runtime_status_method = None
 
-    if captcha_method in {"browser", "personal"}:
+    if captcha_method in {"browser", "agent_captcha", "personal"}:
         runtime_status_method = captcha_method
         runtime_prepare_started = _schedule_captcha_runtime_prepare(captcha_method)
-        if captcha_method == "browser":
+        if captcha_method in {"browser", "agent_captcha"}:
             runtime_prepare_message = (
                 "已开始准备有头浏览器打码运行环境，安装进度将自动显示。"
             )
@@ -1959,12 +1959,12 @@ async def test_captcha_score(
     verify_proxy_source = "none"
     verify_proxy_url = ""
     verify_impersonate = "chrome120"
-    page_verify_only = captcha_method in {"browser", "personal", "remote_browser"}
+    page_verify_only = captcha_method in {"browser", "agent_captcha", "personal", "remote_browser"}
     verify_mode = "browser_page" if page_verify_only else "server_post"
 
     try:
         token_start = time.time()
-        if captcha_method == "browser":
+        if captcha_method in {"browser", "agent_captcha"}:
             from ..services.browser_captcha import BrowserCaptchaService
             service = await BrowserCaptchaService.get_instance(db)
             score_payload, browser_id = await service.get_custom_score(

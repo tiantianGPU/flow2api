@@ -54,7 +54,7 @@ timeout = 7200  # 缓存超时时间(秒), 默认2小时; 设置为0表示不自
 base_url = ""   # 缓存文件访问的基础URL, 留空则使用服务器地址
 
 [captcha]
-captcha_method = "extension"  # 打码方式: extension/yescaptcha/browser/personal/remote_browser
+captcha_method = "extension"  # 打码方式: extension/yescaptcha/browser/agent_captcha/personal/remote_browser; CAPTCHA_METHOD 可覆盖部署配置
 browser_recaptcha_settle_seconds = 3.0  # reload/clr 就绪后的额外稳态等待
 browser_count = 1  # browser 模式的有头浏览器实例数量
 browser_captcha_max_retries = 5  # browser 模式单次获取验证码的最大重试次数
@@ -69,5 +69,7 @@ yescaptcha_task_type = "RecaptchaV3TaskProxylessM1S9"  # 可选: RecaptchaV3Task
 remote_browser_base_url = ""  # 远程有头打码服务地址
 remote_browser_api_key = ""   # 远程有头打码服务 API Key
 remote_browser_timeout = 60   # 远程有头打码请求超时(秒)
+agent_captcha_module_path = "/app/reg-factory" # 镜像内置；本地可改为 reg-factory 根目录
+agent_captcha_timeout = 180     # Arkose/Funcaptcha 求解超时(秒)
 capsolver_api_key = ""
 capsolver_base_url = "https://api.capsolver.com"

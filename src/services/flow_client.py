@@ -1097,7 +1097,7 @@ class FlowClient:
                     "used_media_proxy": bool(prefer_media_proxy),
                 }
             try:
-                if config.captcha_method == "browser" and project_id:
+                if config.captcha_method in {"browser", "agent_captcha"} and project_id:
                     from .browser_captcha import BrowserCaptchaService
 
                     service = await BrowserCaptchaService.get_instance(self.db)
@@ -1612,7 +1612,8 @@ class FlowClient:
             "generation_attempts": [],
         }
         
-        for retry_attempt in range(max_retries):
+        retry_attempt = 0
+        while retry_attempt < max_retries:
             attempt_trace: Dict[str, Any] = {
                 "attempt": retry_attempt + 1,
                 "recaptcha_ok": False,
@@ -1663,6 +1664,9 @@ class FlowClient:
                     log_prefix="[IMAGE] 生成",
                 )
                 if should_retry:
+                    max_retries = self._resolve_generation_retry_budget(max_retries, last_error)
+                    perf_trace["max_retries"] = max_retries
+                    retry_attempt += 1
                     continue
                 raise last_error
             if progress_callback is not None:
@@ -1732,10 +1736,15 @@ class FlowClient:
                     log_prefix="[IMAGE] 生成",
                 )
                 if should_retry:
+                    max_retries = self._resolve_generation_retry_budget(max_retries, e)
+                    perf_trace["max_retries"] = max_retries
+                    retry_attempt += 1
                     continue
                 raise
             finally:
                 await self._notify_browser_captcha_request_finished(browser_id)
+
+            retry_attempt += 1
         
         # 所有重试都失败
         perf_trace["final_success_attempt"] = None
@@ -2692,7 +2701,7 @@ class FlowClient:
         )
         headers["Accept"] = "text/event-stream, text/event-stream"
 
-        if config.captcha_method == "browser" and project_id:
+        if config.captcha_method in {"browser", "agent_captcha"} and project_id:
             from .browser_captcha import BrowserCaptchaService
 
             service = await BrowserCaptchaService.get_instance(self.db)
@@ -4208,7 +4217,7 @@ class FlowClient:
             error_reason: 已归类的错误原因
             error_message: 原始错误文本
         """
-        if config.captcha_method == "browser":
+        if config.captcha_method in {"browser", "agent_captcha"}:
             try:
                 from .browser_captcha import BrowserCaptchaService
                 service = await BrowserCaptchaService.get_instance(self.db)
@@ -4254,7 +4263,7 @@ class FlowClient:
 
     async def _notify_browser_captcha_request_finished(self, browser_id: Optional[Union[int, str]] = None):
         """通知有头浏览器：上游图片/视频请求已结束，可关闭对应打码浏览器。"""
-        if config.captcha_method == "browser":
+        if config.captcha_method in {"browser", "agent_captcha"}:
             try:
                 from .browser_captcha import BrowserCaptchaService
                 service = await BrowserCaptchaService.get_instance(self.db)
@@ -4633,7 +4642,7 @@ class FlowClient:
                 self._set_request_fingerprint(None)
                 return None, None
         # 有头浏览器打码 (playwright)
-        elif captcha_method == "browser":
+        elif captcha_method in {"browser", "agent_captcha"}:
             try:
                 from .browser_captcha import BrowserCaptchaService
                 service = await BrowserCaptchaService.get_instance(self.db)

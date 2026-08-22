@@ -402,7 +402,10 @@ class Config:
     @property
     def captcha_method(self) -> str:
         """Get captcha method"""
-        return self._config.get("captcha", {}).get("captcha_method", "yescaptcha")
+        return os.getenv(
+            "CAPTCHA_METHOD",
+            self._config.get("captcha", {}).get("captcha_method", "yescaptcha"),
+        ).strip().lower()
 
     def set_captcha_method(self, method: str):
         """Set captcha method"""
@@ -673,6 +676,25 @@ class Config:
             return max(5, int(timeout))
         except Exception:
             return 60
+
+    @property
+    def agent_captcha_module_path(self) -> str:
+        """Optional path to reg-factory or its common/agent_captcha.py."""
+        return os.getenv(
+            "AGENT_CAPTCHA_MODULE_PATH",
+            self._config.get("captcha", {}).get("agent_captcha_module_path", ""),
+        ).strip()
+
+    @property
+    def agent_captcha_timeout(self) -> int:
+        value = os.getenv(
+            "AGENT_CAPTCHA_TIMEOUT",
+            self._config.get("captcha", {}).get("agent_captcha_timeout", 180),
+        )
+        try:
+            return max(10, min(600, int(value)))
+        except Exception:
+            return 180
 
     def set_remote_browser_timeout(self, timeout: int):
         """Set remote browser captcha request timeout (seconds)"""

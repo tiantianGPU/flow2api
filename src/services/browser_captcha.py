@@ -1836,19 +1836,33 @@ class TokenBrowser:
             if not ready:
                 return None
 
-            token = await asyncio.wait_for(
-                page.evaluate(f"""
-                    (actionName) => {{
-                        return new Promise((resolve, reject) => {{
-                            const timeout = setTimeout(() => reject(new Error('timeout')), 25000);
-                            grecaptcha.enterprise.execute('{website_key}', {{action: actionName}})
-                                .then(t => {{ clearTimeout(timeout); resolve(t); }})
-                                .catch(e => {{ clearTimeout(timeout); reject(e); }});
-                        }});
-                    }}
-                """, action),
-                timeout=30
-            )
+            if config.captcha_method == "agent_captcha":
+                from .agent_captcha import solve_if_present
+                await solve_if_present(page)
+
+            token = None
+            for execute_attempt in range(2):
+                try:
+                    token = await asyncio.wait_for(
+                        page.evaluate(f"""
+                            (actionName) => {{
+                                return new Promise((resolve, reject) => {{
+                                    const timeout = setTimeout(() => reject(new Error('timeout')), 25000);
+                                    grecaptcha.enterprise.execute('{website_key}', {{action: actionName}})
+                                        .then(t => {{ clearTimeout(timeout); resolve(t); }})
+                                        .catch(e => {{ clearTimeout(timeout); reject(e); }});
+                                }});
+                            }}
+                        """, action),
+                        timeout=30
+                    )
+                    break
+                except Exception:
+                    if execute_attempt or config.captcha_method != "agent_captcha":
+                        raise
+                    from .agent_captcha import solve_if_present
+                    if not await solve_if_present(page):
+                        raise
 
             # 额外等待几秒，确保 enterprise 请求链路完全稳定
             post_wait_seconds = float(getattr(config, "browser_recaptcha_settle_seconds", 3) or 3)
@@ -2203,8 +2217,17 @@ class TokenBrowser:
                         if not ready:
                             raise RuntimeError("grecaptcha.enterprise 未就绪")
 
+                        if config.captcha_method == "agent_captcha":
+                            # A challenge can appear on the submit page after the
+                            # initial token warm-up, so run the external solver here too.
+                            from .agent_captcha import solve_if_present
+                            await solve_if_present(page)
+
                         payload_for_submit = deepcopy(json_data)
-                        response_payload = await asyncio.wait_for(
+                        response_payload = None
+                        for solve_attempt in range(2):
+                            try:
+                                response_payload = await asyncio.wait_for(
                             page.evaluate(
                                 """
                                 async ({ websiteKey, actionName, targetUrl, bearerToken, payload, timeoutMs }) => {
@@ -2287,8 +2310,15 @@ class TokenBrowser:
                                     "timeoutMs": max(5000, int(timeout * 1000)),
                                 },
                             ),
-                            timeout=max(35, timeout + 10),
-                        )
+                                    timeout=max(35, timeout + 10),
+                                )
+                                break
+                            except Exception:
+                                if config.captcha_method != "agent_captcha" or solve_attempt:
+                                    raise
+                                from .agent_captcha import solve_if_present
+                                if not await solve_if_present(page):
+                                    raise
 
                         if not isinstance(response_payload, dict):
                             raise RuntimeError("浏览器内提交返回格式异常")

@@ -1,0 +1,15 @@
+{
+  "name": "recaptcha_v2",
+  "frame_match": ["api2/bframe", "recaptcha/api2"],
+  "mode": "grid_select",
+  "challenge_text_sel": ".rc-imageselect-instructions",
+  "tile_sel": ".rc-imageselect-tile",
+  "submit_sel": "#recaptcha-verify-button",
+  "answer_format": "PICK_LIST",
+  "cols": 3,
+  "max_rounds": 6,
+  "deadline": 55,
+  "settle_ms": 1200,
+  "success_gone_frame": true,
+  "prompt": "You are an accessibility helper reading a reCAPTCHA image-selection challenge. The image below is the challenge grid, tiles labeled #0,#1,#2,... in reading order (left-to-right, top-to-bottom). Task: \"{instruction}\". Select every tile that contains the requested object, including tiles where it appears only partially. If it is a 3x3 'select all squares with X' grid, pick all matching squares. Reason briefly, then output the VERY LAST line exactly: PICK=[a,b,c] (JSON list of matching tile numbers; PICK=[] if none)."
+}
