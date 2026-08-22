@@ -121,10 +121,7 @@ async def _has_visible_vision_challenge(page: Any) -> bool:
         if not any(marker in url for marker in ("recaptcha/api2", "api2/bframe", "hcaptcha.com")):
             continue
         try:
-            instruction = frame.locator(
-                ".rc-imageselect-instructions, [data-testid*='prompt' i], "
-                "[class*='challenge-header' i], [class*='prompt' i]"
-            )
+            instruction = frame.locator(".rc-imageselect-instructions")
             instruction_count = await instruction.count()
             if instruction_count > 0:
                 for index in range(min(instruction_count, 3)):
@@ -136,9 +133,7 @@ async def _has_visible_vision_challenge(page: Any) -> bool:
                     if len(text) >= 5:
                         return True
 
-            tiles = frame.locator(
-                ".rc-imageselect-tile, .task-image, [class*='challenge-image' i]"
-            )
+            tiles = frame.locator(".rc-imageselect-tile")
             visible_tiles = 0
             for index in range(min(await tiles.count(), 12)):
                 box = await tiles.nth(index).bounding_box()
