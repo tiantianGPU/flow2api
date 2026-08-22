@@ -2416,7 +2416,10 @@ class TokenBrowser:
         """Get a token from the shared browser unless a fatal browser error occurs."""
         async with self._semaphore:
             self._solve_inflight += 1
-            max_retries = 3
+            # A missing Enterprise token is not made more likely by replaying the
+            # same browser session. The generation layer already owns its retry
+            # policy; keep this browser solve to one bounded attempt.
+            max_retries = 1
             attempt_timeout = max(30, int(getattr(config, "browser_captcha_attempt_timeout", 60) or 60))
 
             try:
@@ -2483,7 +2486,10 @@ class TokenBrowser:
                     if attempt < max_retries - 1:
                         await asyncio.sleep(1)
 
-                return None, None
+                raise RuntimeError(
+                    "BrowserCaptchaTokenUnavailable: reCAPTCHA Enterprise token was not returned; "
+                    "check residential proxy, Chrome network, and Enterprise readiness"
+                )
             finally:
                 self._solve_inflight = max(0, self._solve_inflight - 1)
                 self.note_idle()

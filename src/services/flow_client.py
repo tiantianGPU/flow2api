@@ -4674,7 +4674,11 @@ class FlowClient:
                 debug_logger.log_error(f"[reCAPTCHA Browser] {error_msg}")
                 print(f"[reCAPTCHA] ❌ 有头浏览器打码失败: {error_msg}")
                 self._set_request_fingerprint(None)
-                if "BrowserCaptchaTimeout" in error_msg or "headed browser captcha exceeded" in error_msg:
+                if any(marker in error_msg for marker in (
+                    "BrowserCaptchaTimeout",
+                    "BrowserCaptchaTokenUnavailable",
+                    "headed browser captcha exceeded",
+                )):
                     raise
                 return None, None
             except ImportError as e:
